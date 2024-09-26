@@ -258,3 +258,4 @@ AMENT_IGNORE
 
 # End of https://www.toptal.com/developers/gitignore/api/python,ros2,c++
 /.vscode/settings.json
+/uwb-serial-ros2/.vscode/*
