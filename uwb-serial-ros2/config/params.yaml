@@ -6,3 +6,4 @@
     anchors_calib_files:
       - 'calib1.csv'
       - 'calib2.csv'
+    compensation: 2 # 0: no compensation, 1: lookup table compensation, 2: linear interpolation

@@ -37,16 +37,18 @@ class UWB(Node):
         self.declare_parameter('timer_rate_s', 0.02)
         self.declare_parameter('boudrate', 115200)
         self.declare_parameter('topic_name', 'uwb/range')
+        self.declare_parameter('compensation', 0)
         self.declare_parameter('anchors_calib_files', ['none'])
 
         usb_port_name = self.get_parameter('usb_port').get_parameter_value().string_value
         topic_name = self.get_parameter('topic_name').get_parameter_value().string_value
         boudrate = self.get_parameter('boudrate').get_parameter_value().integer_value
         rate = self.get_parameter('timer_rate_s').get_parameter_value().double_value
+        self.compensation_type_ = self.get_parameter('compensation').get_parameter_value().integer_value
         self.calib_filenames_ = self.get_parameter('anchors_calib_files').get_parameter_value().string_array_value
         # initialize
         self.calib_data_ = {}
-
+        self.max_range_ = 20 # [m]
         # Use the specified calibration files to generate a lookup table to estimate the offset
         self.loadCalibrationFiles()
 
@@ -74,10 +76,17 @@ class UWB(Node):
                     return
 
                 parsed_data = parseSerialDataUWB(data)
-                range_compensated = self.compensateOffset(parsed_data['range'], parsed_data['id_other'])
+                if(self.compensation_type_ == 0):
+                    range_compensated = parsed_data['range']
+                else:
+                    range_compensated = self.compensateOffset(parsed_data['range'], parsed_data['id_other'])
+
                 
                 if range_compensated is None:
                     self.get_logger().warn(f"Unable to compensate range for ID {parsed_data['id_other']}.")
+                    return
+                if parsed_data['range'] > self.max_range_ or range_compensated < 0.0:
+                    self.get_logger().warn(f"Ignoring range measurement of {parsed_data['range']} for ID {parsed_data['id_other']}.")
                     return
                 
                 msg = UwbRange()
@@ -87,6 +96,7 @@ class UWB(Node):
                 msg.header.stamp = self.get_clock().now().to_msg()
                 msg.header.frame_id = 'uwb'+ str(parsed_data['id_self'])
 
+                # self.get_logger().info(f"{parsed_data['range']}{parsed_data['id_other']}.")
                 self.pub_.publish(msg)
 
         except Exception as err:
@@ -142,11 +152,16 @@ class UWB(Node):
         references = self.calib_data_[id]['references']
         offsets = self.calib_data_[id]['offsets']
 
-        # Find the index of the reference closest to the input distance
-        closest_index = np.argmin(np.abs(references - distance))
-        offset = offsets[closest_index]
+        if self.compensation_type_ == 2:
+            # Perform linear interpolation to find the offset for the input distance
+            interpolated_offset = np.interp(distance, references, offsets)
+        elif self.compensation_type_ == 1:
+            # Find the index of the reference closest to the input distance
+            closest_index = np.argmin(np.abs(references - distance))
+            interpolated_offset = offsets[closest_index]
+        
         # Return the value compensated
-        return distance - offset
+        return distance - interpolated_offset
     
 
     def shutdown(self):
