@@ -6,7 +6,7 @@ import time
 import csv
 import os
 import numpy as np
-from sensor_msgs.msg import Range
+from uwb_interfaces.msg import UwbRange
 from ament_index_python.packages import get_package_share_directory
 
 
@@ -67,16 +67,17 @@ class UWB(Node):
             f"  Max Range (m): {self.max_range_}\n"
             f"  Min Range (m): {self.min_range_}"
         )
-        # Use the specified calibration files to generate a lookup table to 
-        # estimate the offset
+        # initialize
         self.calib_data_ = {}
+        self.max_range_ = 20  # [m]
+        # Use the specified calibration files to generate a lookup table to estimate the offset
         self.loadCalibrationFiles()
 
-        self.pub_ = self.create_publisher(Range, topic_name, 10)
+        self.pub_ = self.create_publisher(UwbRange, topic_name, 10)
 
         self.ser_ = serial.Serial(
             port=usb_port_name,
-            baudrate=boudrate,
+            baudrate=boudrate
         )
         if(self.ser_.is_open):
             self.ser_.close()
@@ -110,10 +111,10 @@ class UWB(Node):
                                            f"for ID {parsed_data['id_other']}.")
                     return
 
-                msg = Range()
-                msg.max_range = self.max_range_
-                msg.min_range = self.min_range_
+                msg = UwbRange()
                 msg.range = range_compensated
+                msg.source = parsed_data['id_self']
+                msg.target = parsed_data['id_other']
                 msg.header.stamp = self.get_clock().now().to_msg()
                 msg.header.frame_id = 'uwb' + str(parsed_data['id_self'])
 
